@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <!-- Receipt Header -->
+            <div class="card shadow-lg">
+                <div class="card-header bg-gradient text-white text-center py-5" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <h1 class="mb-3"><i class="fas fa-receipt"></i> Donation Receipt</h1>
+                    <p class="mb-0 h5">Function 29: Digital Receipt</p>
+                </div>
+
+                <div class="card-body p-5">
+                    <!-- Completion Status -->
+                    <div class="alert alert-success mb-4">
+                        <h4 class="alert-heading">✓ Donation Successfully Completed!</h4>
+                        <p>Your food donation has been verified and transferred to those in need.</p>
+                    </div>
+
+                    <!-- Receipt Details Table -->
+                    <table class="table table-borderless">
+                        <tbody>
+                            <tr>
+                                <td class="font-weight-bold">Receipt ID:</td>
+                                <td>#RECV-{{ receipt['claim_id'] }}-{{ receipt['receipt_date'].strftime('%Y%m%d') }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Receipt Date & Time:</td>
+                                <td>{{ receipt['receipt_date']|datetime('%A, %B %d, %Y at %I:%M %p') }}</td>
+                            </tr>
+                            <tr class="border-top border-bottom">
+                                <td colspan="2" class="font-weight-bold py-3">📦 DONATION DETAILS</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Food Item:</td>
+                                <td><strong style="color: #667eea;">{{ receipt['food_title'] }}</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Quantity Donated:</td>
+                                <td>{{ receipt['quantity'] }} portions</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">People Served:</td>
+                                <td>
+                                    <span class="badge badge-success" style="padding: 8px 12px; font-size: 14px;">
+                                        {{ receipt['people_served'] }} individuals
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr class="border-top border-bottom">
+                                <td colspan="2" class="font-weight-bold py-3">👤 DONOR INFORMATION</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Donor Name:</td>
+                                <td>{{ receipt['donor_name'] }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Donor Type:</td>
+                                <td>{{ receipt['donor_org'] }}</td>
+                            </tr>
+                            <tr class="border-top border-bottom">
+                                <td colspan="2" class="font-weight-bold py-3">🏢 RECIPIENT ORGANIZATION</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Organization:</td>
+                                <td><strong>{{ receipt['ngo_name'] }}</strong></td>
+                            </tr>
+                            <tr class="border-top border-bottom">
+                                <td colspan="2" class="font-weight-bold py-3">📅 TRANSACTION DETAILS</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Pickup Date & Time:</td>
+                                <td>{{ receipt['pickup_time']|datetime('%A, %B %d, %Y at %I:%M %p') if receipt['pickup_time'] else 'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <td class="font-weight-bold">Status:</td>
+                                <td>
+                                    <span class="badge badge-success" style="padding: 8px 12px; font-size: 14px;">
+                                        {{ receipt['status']|upper }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% if receipt['notes'] %}
+                            <tr>
+                                <td class="font-weight-bold">Special Notes:</td>
+                                <td>{{ receipt['notes'] }}</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+
+                    <!-- Impact Message -->
+                    <div class="alert alert-info mt-4 p-4">
+                        <h5 class="alert-heading">🌍 Your Impact</h5>
+                        <p class="mb-0">
+                            By donating <strong>{{ receipt['quantity'] }} portions</strong> of <strong>{{ receipt['food_title'] }}</strong>, 
+                            you helped feed <strong style="color: #28a745;">{{ receipt['people_served'] }} people</strong> in your community. 
+                            Thank you for reducing food waste and making a difference!
+                        </p>
+                    </div>
+
+                    <!-- Footer Message -->
+                    <div class="text-center mt-5 pt-4 border-top">
+                        <p class="text-muted">
+                            <i class="fas fa-quote-left"></i>
+                            Every meal shared is a community strengthened.
+                            <i class="fas fa-quote-right"></i>
+                        </p>
+                        <p class="small text-muted">
+                            This receipt has been digitally archived in our system (Function 28).
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Print & Download Section -->
+                <div class="card-footer bg-light p-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button class="btn btn-primary btn-block" onclick="window.print()">
+                                <i class="fas fa-print"></i> Print Receipt
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-success btn-block" onclick="downloadReceipt()">
+                                <i class="fas fa-download"></i> Download PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Back Navigation -->
+            <div class="mt-4">
+                {% if is_donor %}
+                    <a href="{{ url_for('donor_active_orders') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left"></i> Back to Active Orders
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('ngo_pickups') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left"></i> Back to My Pickups
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Print Styles -->
+<style>
+    @media print {
+        .card-footer {
+            display: none;
+        }
+        .btn-outline-primary {
+            display: none;
+        }
+        body {
+            background: white;
+        }
+        .card {
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
+    }
+
+    .card-header.bg-gradient {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    .table-borderless tbody tr {
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .table-borderless tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .badge {
+        font-weight: 600;
+    }
+</style>
+
+<script>
+function downloadReceipt() {
+    // For now, use print-to-PDF feature
+    // In production, could integrate with a library like html2pdf
+    alert('PDF download: Use the Print button to save as PDF from your browser (Ctrl+P or Cmd+P, then select "Save as PDF")');
+}
+
+// Auto-adjust for printing
+document.addEventListener('DOMContentLoaded', function() {
+    // Ensure receipt is properly formatted
+    const receipt = document.querySelector('.card');
+    if (receipt) {
+        receipt.style.margin = '20px';
+    }
+});
+</script>
+{% endblock %}

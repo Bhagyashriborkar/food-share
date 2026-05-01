@@ -188,6 +188,24 @@ class Review(db.Model):
     claim_id = db.Column(db.Integer, db.ForeignKey('claim.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class HistoryLog(db.Model):
+    """Archive of completed claims/transactions"""
+    id = db.Column(db.Integer, primary_key=True)
+    claim_id = db.Column(db.Integer, nullable=False)
+    food_title = db.Column(db.String(200), nullable=False)
+    donor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ngo_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    quantity_served = db.Column(db.Integer)
+    people_served = db.Column(db.Integer)
+    pickup_time = db.Column(db.DateTime)
+    completion_time = db.Column(db.DateTime)
+    notes = db.Column(db.Text)
+    archived_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    donor = db.relationship('User', foreign_keys=[donor_id], backref='donated_history')
+    ngo = db.relationship('User', foreign_keys=[ngo_id], backref='received_history')
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -222,6 +240,104 @@ def format_datetime(value, format='%b %d, %Y %I:%M %p'):
     if value is None:
         return ""
     return value.strftime(format)
+
+def archive_claim_to_history(claim):
+    """
+    Archive a completed claim to HistoryLog (Function 28)
+    Moves data from active Claim to permanent HistoryLog record
+    """
+    history = HistoryLog(
+        claim_id=claim.id,
+        food_title=claim.food_listing.title,
+        donor_id=claim.food_listing.donor_id,
+        ngo_id=claim.ngo_id,
+        quantity_served=claim.food_listing.quantity,
+        people_served=claim.people_served or claim.food_listing.quantity,
+        pickup_time=claim.pickup_time,
+        completion_time=datetime.utcnow(),
+        notes=claim.notes,
+        archived_at=datetime.utcnow()
+    )
+    db.session.add(history)
+    return history
+
+def generate_receipt(claim, receipt_type='donor'):
+    """
+    Generate a receipt/thank you message (Function 29)
+    receipt_type: 'donor' or 'ngo'
+    Returns a dictionary with receipt details
+    """
+    food = claim.food_listing
+    donor = food.donor
+    ngo = claim.receiver
+    
+    receipt = {
+        'claim_id': claim.id,
+        'receipt_date': datetime.utcnow(),
+        'food_title': food.title,
+        'quantity': food.quantity,
+        'people_served': claim.people_served or food.quantity,
+        'donor_name': donor.username,
+        'donor_org': donor.organization if donor.role == 'ngo' else 'Individual Donor',
+        'ngo_name': ngo.organization if ngo.role == 'ngo' else ngo.username,
+        'pickup_time': claim.pickup_time,
+        'notes': claim.notes or 'No special notes',
+        'status': 'completed' if claim.otp_verified else 'pending'
+    }
+    return receipt
+
+def send_receipt_email(user_email, user_name, receipt_data):
+    """
+    Send receipt via email to donor or NGO
+    """
+    subject = f"Food Donation Receipt - {receipt_data['food_title']}"
+    
+    if 'ngo' in user_name.lower() or '@ngo' in user_email.lower():
+        # NGO receipt
+        body = f"""
+Dear {user_name},
+
+Thank you for collecting the food donation!
+
+Receipt Details:
+- Food Item: {receipt_data['food_title']}
+- Quantity: {receipt_data['quantity']} portions
+- People Served: {receipt_data['people_served']}
+- Donor: {receipt_data['donor_name']}
+- Pickup Date: {receipt_data['pickup_time'].strftime('%b %d, %Y %I:%M %p') if receipt_data['pickup_time'] else 'N/A'}
+- Status: {receipt_data['status'].upper()}
+
+Claim ID: {receipt_data['claim_id']}
+
+Thank you for your work in reducing food waste and feeding the community!
+
+Best regards,
+Food Waste Reduction System
+        """
+    else:
+        # Donor receipt
+        body = f"""
+Dear {user_name},
+
+Your food donation has been successfully collected!
+
+Receipt Details:
+- Food Item: {receipt_data['food_title']}
+- Quantity: {receipt_data['quantity']} portions
+- Recipient Organization: {receipt_data['ngo_name']}
+- People Served: {receipt_data['people_served']}
+- Pickup Date: {receipt_data['pickup_time'].strftime('%b %d, %Y %I:%M %p') if receipt_data['pickup_time'] else 'N/A'}
+
+Claim ID: {receipt_data['claim_id']}
+
+Impact: Your donation helped feed {receipt_data['people_served']} people in need.
+Thank you for making a difference!
+
+Best regards,
+Food Waste Reduction System
+        """
+    
+    send_email(user_email, subject, body)
 
 app.jinja_env.filters['datetime'] = format_datetime
 
@@ -815,18 +931,178 @@ def reject_claim(claim_id):
 @app.route('/claim/<int:claim_id>/verify_otp', methods=['POST'])
 @login_required
 def verify_otp(claim_id):
+    """
+    Function 27: Digital Handshake (OTP)
+    Input OTP -> Compare with DB -> If Match -> Mark `Collected`
+    Also handles Function 28 (archiving) and Function 29 (receipt generation)
+    """
     claim = Claim.query.get_or_404(claim_id)
+    
+    # Verify that the current user is the donor
     if claim.food_listing.donor_id != current_user.id:
         abort(403)
+    
     data = request.get_json()
-    if data.get('otp') == claim.otp_code:
-        claim.status = 'picked_up'
-        claim.pickup_time = datetime.utcnow()
-        claim.food_listing.status = 'picked_up'
-        claim.otp_verified = True
-        db.session.commit()
-        return jsonify({'success': True})
-    return jsonify({'success': False, 'error': 'Invalid OTP'}), 400
+    otp_input = data.get('otp', '').strip()
+    
+    # Validate OTP
+    if not otp_input:
+        return jsonify({'success': False, 'error': 'OTP is required'}), 400
+    
+    if otp_input != claim.otp_code:
+        return jsonify({'success': False, 'error': 'Invalid OTP code'}), 400
+    
+    # OTP is valid - Mark as collected (Function 27)
+    claim.status = 'completed'
+    claim.pickup_time = datetime.utcnow()
+    claim.food_listing.status = 'completed'
+    claim.otp_verified = True
+    
+    # Function 28: Archive the claim to HistoryLog
+    try:
+        history = archive_claim_to_history(claim)
+        db.session.add(history)
+    except Exception as e:
+        print(f"Error archiving claim: {e}")
+        # Continue even if archiving fails
+    
+    # Function 29: Generate receipt and send to both parties
+    try:
+        receipt = generate_receipt(claim)
+        
+        # Send receipt to donor
+        send_receipt_email(
+            current_user.email,
+            current_user.username,
+            receipt
+        )
+        
+        # Send receipt to NGO
+        ngo = claim.receiver
+        send_receipt_email(
+            ngo.email,
+            ngo.organization or ngo.username,
+            receipt
+        )
+    except Exception as e:
+        print(f"Error generating/sending receipt: {e}")
+        # Continue even if receipt fails
+    
+    # Create notifications for both parties
+    try:
+        donor_notification = Notification(
+            user_id=claim.food_listing.donor_id,
+            title='Donation Completed!',
+            message=f'Your food donation "{claim.food_listing.title}" has been collected by {claim.receiver.organization or claim.receiver.username}. {claim.people_served or claim.food_listing.quantity} people served!',
+            notification_type='completion'
+        )
+        
+        ngo_notification = Notification(
+            user_id=claim.ngo_id,
+            title='Pickup Completed!',
+            message=f'Successfully collected "{claim.food_listing.title}" from {claim.food_listing.donor.username}. {claim.people_served or claim.food_listing.quantity} people served!',
+            notification_type='completion'
+        )
+        
+        db.session.add(donor_notification)
+        db.session.add(ngo_notification)
+    except Exception as e:
+        print(f"Error creating notifications: {e}")
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'OTP verified successfully! Donation marked as completed.',
+        'claim_id': claim.id
+    })
+
+# =============== MODULE 4 ROUTES: FULFILLMENT & LOGISTICS ===============
+
+@app.route('/donor/active_orders')
+@login_required
+def donor_active_orders():
+    """
+    Module 4 - Function 25: Donor view of active pickups
+    Shows all claims for the donor's food with OTP verification interface
+    """
+    if current_user.role != 'donor':
+        flash('Access denied', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get all claims for donor's food listings that are confirmed/pending
+    active_claims = Claim.query.join(FoodListing)\
+        .filter(FoodListing.donor_id == current_user.id,
+                Claim.status.in_(['confirmed', 'pending']))\
+        .order_by(Claim.created_at.desc()).all()
+    
+    # Get completed claims (for history)
+    completed_claims = Claim.query.join(FoodListing)\
+        .filter(FoodListing.donor_id == current_user.id,
+                Claim.status == 'completed')\
+        .order_by(Claim.pickup_time.desc()).all()
+    
+    return render_template('donor/active_orders.html',
+                         active_claims=active_claims,
+                         completed_claims=completed_claims,
+                         datetime=datetime)
+
+@app.route('/ngo/pickups')
+@login_required
+def ngo_pickups():
+    """
+    Module 4 - Function 25: NGO view of active pickups/tasks
+    Shows all confirmed pickups with countdown timers
+    """
+    if current_user.role != 'ngo':
+        flash('Access denied', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get all confirmed pickups for this NGO
+    pickups = Claim.query\
+        .filter(Claim.ngo_id == current_user.id,
+                Claim.status == 'confirmed')\
+        .order_by(Claim.created_at.desc()).all()
+    
+    # Get completed pickups (for history)
+    completed_pickups = Claim.query\
+        .filter(Claim.ngo_id == current_user.id,
+                Claim.status == 'completed')\
+        .order_by(Claim.pickup_time.desc()).all()
+    
+    return render_template('ngo/pickups.html',
+                         pickups=pickups,
+                         completed_pickups=completed_pickups,
+                         datetime=datetime)
+
+@app.route('/claim/<int:claim_id>/receipt')
+@login_required
+def view_receipt(claim_id):
+    """
+    Module 4 - Function 29: Digital Receipt View
+    Display receipt for completed donation
+    """
+    claim = Claim.query.get_or_404(claim_id)
+    
+    # Verify user has access (donor or ngo involved in claim)
+    if claim.food_listing.donor_id != current_user.id and claim.ngo_id != current_user.id:
+        abort(403)
+    
+    # Only show receipt if claim is completed
+    if claim.status != 'completed' or not claim.otp_verified:
+        flash('Receipt is only available for completed claims', 'warning')
+        return redirect(url_for('dashboard'))
+    
+    # Generate receipt data
+    receipt = generate_receipt(claim)
+    is_donor = claim.food_listing.donor_id == current_user.id
+    
+    return render_template('receipt.html',
+                         claim=claim,
+                         receipt=receipt,
+                         is_donor=is_donor,
+                         datetime=datetime)
+
 
 # =============== ADMIN ROUTES ===============
 @app.route('/admin')

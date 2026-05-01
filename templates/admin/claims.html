@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Manage Claims - FoodShare{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="h2">Manage Claims</h1>
+    </div>
+</div>
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Listing</th>
+                        <th>Donor</th>
+                        <th>NGO</th>
+                        <th>Status</th>
+                        <th>Pickup Time</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for claim in claims %}
+                    <tr>
+                        <td>{{ claim.id }}</td>
+                        <td>{{ claim.food_listing.title }}</td>
+                        <td>{{ claim.food_listing.donor.username }}</td>
+                        <td>{{ claim.receiver.username }}</td>
+                        <td>{{ claim.status }}</td>
+                        <td>{{ claim.pickup_time or '-' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('admin_update_claim', claim_id=claim.id) }}" class="d-inline">
+                                <select name="status" class="form-select form-select-sm d-inline" style="width:auto; display:inline-block;">
+                                    <option value="pending" {% if claim.status=='pending' %}selected{% endif %}>pending</option>
+                                    <option value="confirmed" {% if claim.status=='confirmed' %}selected{% endif %}>confirmed</option>
+                                    <option value="picked_up" {% if claim.status=='picked_up' %}selected{% endif %}>picked_up</option>
+                                    <option value="cancelled" {% if claim.status=='cancelled' %}selected{% endif %}>cancelled</option>
+                                </select>
+                                <input type="text" name="notes" placeholder="admin note" class="form-control form-control-sm d-inline" style="width:220px; display:inline-block;">
+                                <button class="btn btn-sm btn-primary">Update</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

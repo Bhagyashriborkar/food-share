@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Send Notifications - FoodShare{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="h2">Notifications</h1>
+    </div>
+</div>
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Target</label>
+                <select name="target" class="form-select">
+                    <option value="all">All users</option>
+                    <option value="user">Specific user</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">User (if specific)</label>
+                <select name="user_id" class="form-select">
+                    <option value="">-- select user --</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}">{{ u.username }} ({{ u.email }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input name="title" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Message</label>
+                <textarea name="message" class="form-control" rows="4" required></textarea>
+            </div>
+            <button class="btn btn-primary">Send</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

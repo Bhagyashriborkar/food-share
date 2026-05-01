@@ -38,8 +38,9 @@
                         </td>
                         <td>{{ listing.created_at.strftime('%Y-%m-%d') }}</td>
                         <td>
+                            <a href="{{ url_for('admin_edit_listing', listing_id=listing.id) }}" class="btn btn-sm btn-primary">Edit</a>
                             <form method="POST" action="{{ url_for('admin_delete_listing', listing_id=listing.id) }}"
-                                  onsubmit="return confirm('Delete this listing?')" class="d-inline">
+                                  onsubmit="return confirm('Delete this listing?')" class="d-inline ms-1">
                                 <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                             </form>
                         </td>

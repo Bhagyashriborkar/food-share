@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">
+        <i class="fas fa-clipboard-list"></i> My Pickups (Function 25)
+        <span class="badge badge-primary">{{ pickups|length }}</span>
+    </h2>
+
+    {% if pickups %}
+    <div class="row">
+        {% for pickup in pickups %}
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        {{ pickup.food_listing.title }}
+                        <span class="badge badge-light float-right">CONFIRMED</span>
+                    </h5>
+                </div>
+
+                <div class="card-body">
+                    <p class="mb-2">
+                        <strong>Donor:</strong> {{ pickup.food_listing.donor.username }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Organization:</strong> {{ pickup.food_listing.donor.organization or 'Individual Donor' }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Quantity:</strong> {{ pickup.food_listing.quantity }} portions
+                    </p>
+                    <p class="mb-2">
+                        <strong>Pickup Location:</strong> {{ pickup.food_listing.location }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Pickup Address:</strong> {{ pickup.food_listing.pickup_address }}
+                    </p>
+                    <p class="mb-2">
+                        <strong>Pickup Window:</strong>
+                        <br />{{ pickup.food_listing.pickup_start|datetime('%b %d, %I:%M %p') }} - 
+                        {{ pickup.food_listing.pickup_end|datetime('%b %d, %I:%M %p') }}
+                    </p>
+
+                    <!-- OTP Display for NGO -->
+                    <div class="alert alert-warning mt-3">
+                        <strong>OTP for Handover:</strong>
+                        <div class="otp-display mt-2 p-3 bg-white text-center rounded" style="font-size: 24px; font-weight: bold; font-family: monospace;">
+                            {{ pickup.otp_code }}
+                        </div>
+                        <small class="d-block mt-2">🔐 Donor will verify this OTP when you complete the pickup (Function 27)</small>
+                    </div>
+
+                    <!-- Time Remaining Countdown -->
+                    <div class="progress mt-3">
+                        <div class="progress-bar" role="progressbar" style="width: 75%;"></div>
+                    </div>
+                    <small class="text-muted">Time window closing at {{ pickup.food_listing.pickup_end|datetime('%I:%M %p') }}</small>
+
+                    <!-- People Served Input -->
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <label class="font-weight-bold">People Served (Optional):</label>
+                        <input type="number" class="form-control mt-2 people-served-input" 
+                               placeholder="Enter number of people served"
+                               value="{{ pickup.food_listing.quantity }}"
+                               data-claim-id="{{ pickup.id }}">
+                        <small class="text-muted">Leave as is if serving full quantity</small>
+                    </div>
+
+                    <div class="mt-3">
+                        <a href="#" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal{{ pickup.id }}">
+                            <i class="fas fa-info-circle"></i> View Full Details
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-calendar"></i> Confirmed on {{ pickup.created_at|datetime('%b %d, %I:%M %p') }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Details Modal -->
+        <div class="modal fade" id="detailsModal{{ pickup.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Pickup Details</h5>
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p><strong>Food Item:</strong> {{ pickup.food_listing.title }}</p>
+                        <p><strong>Description:</strong> {{ pickup.food_listing.description }}</p>
+                        <p><strong>Type:</strong> {{ pickup.food_listing.food_type }}</p>
+                        {% if pickup.food_listing.allergens %}
+                        <div class="alert alert-danger">
+                            <strong>⚠️ Allergens:</strong> {{ pickup.food_listing.allergens }}
+                        </div>
+                        {% endif %}
+                        <p><strong>Donor Contact:</strong> {{ pickup.food_listing.donor.phone }}</p>
+                        <p><strong>Donor Email:</strong> {{ pickup.food_listing.donor.email }}</p>
+                        <p><strong>Donor Address:</strong> {{ pickup.food_listing.donor.address }}</p>
+                        {% if pickup.notes %}
+                        <p><strong>Special Notes:</strong> {{ pickup.notes }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i>
+        No confirmed pickups scheduled. Check "Available Food" to claim new donations.
+    </div>
+    {% endif %}
+
+    <!-- Completed Pickups Section (Function 28 - Archived History) -->
+    {% if completed_pickups %}
+    <div class="mt-5">
+        <h3 class="mb-3">
+            <i class="fas fa-check-circle text-success"></i> Completed Pickups
+            <span class="badge badge-success">{{ completed_pickups|length }}</span>
+        </h3>
+
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Food Item</th>
+                        <th>Donor</th>
+                        <th>Quantity</th>
+                        <th>People Served</th>
+                        <th>Completed</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pickup in completed_pickups %}
+                    <tr>
+                        <td>{{ pickup.food_listing.title }}</td>
+                        <td>{{ pickup.food_listing.donor.username }}</td>
+                        <td>{{ pickup.food_listing.quantity }}</td>
+                        <td><span class="badge badge-info">{{ pickup.people_served or pickup.food_listing.quantity }}</span></td>
+                        <td>{{ pickup.pickup_time|datetime('%b %d, %Y') }}</td>
+                        <td>
+                            <a href="{{ url_for('view_receipt', claim_id=pickup.id) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-receipt"></i> Receipt (Fn 29)
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update time remaining countdown every minute
+    function updateCountdowns() {
+        document.querySelectorAll('[data-pickup-end]').forEach(element => {
+            const endTime = new Date(element.getAttribute('data-pickup-end'));
+            const now = new Date();
+            const timeLeft = endTime - now;
+            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            
+            if (timeLeft > 0) {
+                element.textContent = `${hours}h ${minutes}m remaining`;
+            } else {
+                element.textContent = 'Pickup window expired';
+                element.classList.add('text-danger');
+            }
+        });
+    }
+
+    updateCountdowns();
+    setInterval(updateCountdowns, 60000); // Update every minute
+});
+</script>
+
+<style>
+.otp-display {
+    letter-spacing: 6px;
+    border: 2px dashed #ffc107;
+    background-color: #fff3cd;
+}
+
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1) !important;
+}
+
+.progress {
+    height: 8px;
+}
+
+.people-served-input {
+    font-size: 14px;
+}
+</style>
+{% endblock %}

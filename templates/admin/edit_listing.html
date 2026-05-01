@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Edit Listing - FoodShare{% endblock %}
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="h2">Edit Listing</h1>
+    </div>
+</div>
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label">Title</label>
+                <input name="title" value="{{ listing.title }}" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Quantity</label>
+                <input name="quantity" value="{{ listing.quantity }}" class="form-control" type="number">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="available" {% if listing.status=='available' %}selected{% endif %}>available</option>
+                    <option value="claimed" {% if listing.status=='claimed' %}selected{% endif %}>claimed</option>
+                    <option value="picked_up" {% if listing.status=='picked_up' %}selected{% endif %}>picked_up</option>
+                    <option value="expired" {% if listing.status=='expired' %}selected{% endif %}>expired</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Pickup End (ISO)</label>
+                <input name="pickup_end" value="{{ listing.pickup_end }}" class="form-control">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control">{{ listing.description }}</textarea>
+            </div>
+            <button class="btn btn-success">Save</button>
+            <a href="{{ url_for('admin_listings') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}
